@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry kind="src" path="src"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.USER_LIBRARY/ACTIVEMQ"/>
+	<classpathentry exported="true" kind="var" path="JRE_LIB" sourcepath="JRE_SRC"/>
+	<classpathentry kind="var" path="ADEMPIERE_HOME/lib/Adempiere.jar"/>
+	<classpathentry kind="var" path="ADEMPIERE_HOME/lib/adempiereApps.jar"/>
+	<classpathentry kind="var" path="ADEMPIERE_HOME/lib/AdempiereCLib.jar"/>
+	<classpathentry kind="var" path="ADEMPIERE_HOME/lib/adempiereRoot.jar"/>
+	<classpathentry kind="var" path="ADEMPIERE_HOME/lib/postgresql.jar"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.USER_LIBRARY/TOMCAT_LIB"/>
+	<classpathentry kind="lib" path="D:/XplukERP/lib/jboss.jar"/>
+	<classpathentry kind="output" path="build/classes"/>
+</classpath>
