@@ -92,6 +92,7 @@ public class MInOut extends X_M_InOut implements DocAction
 		MOrderLine[] oLines = order.getLines(true, "M_Product_ID");
 		for (int i = 0; i < oLines.length; i++)
 		{
+			// Calculate how much is left to deliver (ordered - delivered)
 			BigDecimal qty = oLines[i].getQtyOrdered().subtract(oLines[i].getQtyDelivered());
 			//	Nothing to deliver
 			if (qty.signum() == 0)
@@ -158,7 +159,8 @@ public class MInOut extends X_M_InOut implements DocAction
 			return null;
 
 		return retValue;
-	}	//	createFrom
+
+	}
 
 	/**
 	 * 	Create new Shipment by copying
@@ -325,6 +327,8 @@ public class MInOut extends X_M_InOut implements DocAction
 			super.setProcessed (false);
 			setProcessing(false);
 			setPosted(false);
+			// Noname Group - Set Client
+			setAD_Client_ID(Env.getAD_Client_ID(ctx));
 		}
 	}	//	MInOut
 
@@ -741,7 +745,7 @@ public class MInOut extends X_M_InOut implements DocAction
 			if (counter)
 			{
 				fromLine.setRef_InOutLine_ID(line.getM_InOutLine_ID());
-				fromLine.save(get_TrxName());
+				fromLine.saveEx(get_TrxName());
 			}
 		}
 		if (fromLines.length != count) {
@@ -1542,7 +1546,7 @@ public class MInOut extends X_M_InOut implements DocAction
 						&& sLine.getMovementQty().compareTo(oLine.getQtyOrdered()) == 0) //  just if full match [ 1876965 ]
 					{
 						oLine.setM_AttributeSetInstance_ID(sLine.getM_AttributeSetInstance_ID());
-						oLine.save(get_TrxName());
+						oLine.saveEx(get_TrxName());
 					}
 				}
 				else	//	No Order - Try finding links via Invoice
@@ -1571,7 +1575,7 @@ public class MInOut extends X_M_InOut implements DocAction
 							&& sLine.getMovementQty().compareTo(oLine.getQtyOrdered()) == 0) //  just if full match [ 1876965 ]
 						{
 							oLine.setM_AttributeSetInstance_ID(sLine.getM_AttributeSetInstance_ID());
-							oLine.save(get_TrxName());
+							oLine.saveEx(get_TrxName());
 						}
 					}
 				}	//	No Order
@@ -1669,7 +1673,7 @@ public class MInOut extends X_M_InOut implements DocAction
 
 		//	References (Should not be required
 		dropShipment.setSalesRep_ID(getSalesRep_ID());
-		dropShipment.save(get_TrxName());
+		dropShipment.saveEx(get_TrxName());
 
 		//		Update line order references to linked sales order lines
 		MInOutLine[] lines = dropShipment.getLines(true);
@@ -1686,7 +1690,10 @@ public class MInOut extends X_M_InOut implements DocAction
 		log.fine(dropShipment.toString());
 
 		dropShipment.setDocAction(DocAction.ACTION_Complete);
-		dropShipment.processIt(DocAction.ACTION_Complete);
+		// added AdempiereException by Zuhri
+		if (!dropShipment.processIt(DocAction.ACTION_Complete))
+			throw new AdempiereException("Failed when processing document - " + dropShipment.getProcessMsg());
+		// end added
 		dropShipment.saveEx();
 
 		return dropShipment;
@@ -1879,7 +1886,7 @@ public class MInOut extends X_M_InOut implements DocAction
 
 		//	Refernces (Should not be required
 		counter.setSalesRep_ID(getSalesRep_ID());
-		counter.save(get_TrxName());
+		counter.saveEx(get_TrxName());
 
 		String MovementType = counter.getMovementType();
 		boolean inTrx = MovementType.charAt(1) == '+';	//	V+ Vendor Receipt
@@ -1894,7 +1901,7 @@ public class MInOut extends X_M_InOut implements DocAction
 			counterLine.setM_Locator_ID(0);
 			counterLine.setM_Locator_ID(inTrx ? Env.ZERO : counterLine.getMovementQty());
 			//
-			counterLine.save(get_TrxName());
+			counterLine.saveEx(get_TrxName());
 		}
 
 		log.fine(counter.toString());
@@ -1905,8 +1912,11 @@ public class MInOut extends X_M_InOut implements DocAction
 			if (counterDT.getDocAction() != null)
 			{
 				counter.setDocAction(counterDT.getDocAction());
-				counter.processIt(counterDT.getDocAction());
-				counter.save(get_TrxName());
+				// added AdempiereException by zuhri
+				if (!counter.processIt(counterDT.getDocAction()))
+					throw new AdempiereException("Failed when processing document - " + counter.getProcessMsg());
+				// end added
+				counter.saveEx(get_TrxName());
 			}
 		}
 		return counter;
@@ -1949,7 +1959,7 @@ public class MInOut extends X_M_InOut implements DocAction
 				{
 					line.setQty(Env.ZERO);
 					line.addDescription("Void (" + old + ")");
-					line.save(get_TrxName());
+					line.saveEx(get_TrxName());
 				}
 			}
 			//

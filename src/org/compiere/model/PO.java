@@ -93,12 +93,12 @@ import org.w3c.dom.Element;
  *			<li>https://sourceforge.net/tracker/?func=detail&aid=2947622&group_id=176962&atid=879332
  */
 public abstract class PO
-	implements Serializable, Comparator, Evaluatee
+	implements Serializable, Comparator, Evaluatee, Cloneable
 {
 	/**
 	 * 
 	 */
-	private static final long serialVersionUID = 6604764467216189092L;
+	private static final long serialVersionUID = -4708137979682082002L;
 
 	private static final String USE_TIMEOUT_FOR_UPDATE = "org.adempiere.po.useTimeoutForUpdate";
 
@@ -1227,28 +1227,15 @@ public abstract class PO
 		{
 			for (int i1 = 0; i1 < from.m_oldValues.length; i1++)
 			{
-				if (from.p_info.isVirtualColumn(i1)
-					|| from.p_info.isKey(i1))		//	KeyColumn
+				if (! from.p_info.isAllowCopy(i1))
 					continue;
 				String colName = from.p_info.getColumnName(i1);
-				//  Ignore Standard Values
-				if (colName.startsWith("Created")
-					|| colName.startsWith("Updated")
-					|| colName.equals("IsActive")
-					|| colName.equals("AD_Client_ID")
-					|| colName.equals("AD_Org_ID")
-					|| colName.equals("Processing")
-					)
-					;	//	ignore
-				else
+				for (int i2 = 0; i2 < to.m_oldValues.length; i2++)
 				{
-					for (int i2 = 0; i2 < to.m_oldValues.length; i2++)
+					if (to.p_info.getColumnName(i2).equals(colName))
 					{
-						if (to.p_info.getColumnName(i2).equals(colName))
-						{
-							to.m_newValues[i2] = from.m_oldValues[i1];
-							break;
-						}
+						to.m_newValues[i2] = from.m_oldValues[i1];
+						break;
 					}
 				}
 			}	//	from loop
@@ -1257,21 +1244,9 @@ public abstract class PO
 		{
 			for (int i = 0; i < from.m_oldValues.length; i++)
 			{
-				if (from.p_info.isVirtualColumn(i)
-					|| from.p_info.isKey(i))		//	KeyColumn
+				if (! from.p_info.isAllowCopy(i))
 					continue;
-				String colName = from.p_info.getColumnName(i);
-				//  Ignore Standard Values
-				if (colName.startsWith("Created")
-					|| colName.startsWith("Updated")
-					|| colName.equals("IsActive")
-					|| colName.equals("AD_Client_ID")
-					|| colName.equals("AD_Org_ID")
-					|| colName.equals("Processing")
-					)
-					;	//	ignore
-				else
-					to.m_newValues[i] = from.m_oldValues[i];
+				to.m_newValues[i] = from.m_oldValues[i];
 			}
 		}	//	same class
 	}	//	copy
@@ -1735,7 +1710,7 @@ public abstract class PO
 	 * 	Set AD_Client
 	 * 	@param AD_Client_ID client
 	 */
-	public final void setAD_Client_ID (int AD_Client_ID)
+	final protected void setAD_Client_ID (int AD_Client_ID)
 	{
 		set_ValueNoCheck ("AD_Client_ID", new Integer(AD_Client_ID));
 	}	//	setAD_Client_ID
@@ -1983,6 +1958,7 @@ public abstract class PO
 			{
 				reset = get_AccessLevel() == ACCESSLEVEL_CLIENT
 					|| get_AccessLevel() == ACCESSLEVEL_SYSTEMCLIENT
+					|| get_AccessLevel() == ACCESSLEVEL_ALL
 					|| get_AccessLevel() == ACCESSLEVEL_CLIENTORG;
 			}
 			if (reset)
@@ -2880,6 +2856,15 @@ public abstract class PO
 				}
 			}	//	processed
 		}	//	force
+
+		// Carlos Ruiz - globalqss - IDEMPIERE-111
+		// Check if the role has access to this client
+		if (!MRole.getDefault().isClientAccess(getAD_Client_ID(), true))
+		{
+			log.warning("You cannot delete this record, role doesn't have access");
+			log.saveError("AccessCannotDelete", "", false);
+			return false;
+		}
 
 		Trx localTrx = null;
 		boolean success = false;
@@ -3999,95 +3984,146 @@ public abstract class PO
 		}
 		return false;
 	}
+
+	@Override
+	protected Object clone() throws CloneNotSupportedException {
+		PO clone = (PO) super.clone();
+		clone.m_trxName = null;
+		if (m_custom != null)
+		{
+			clone.m_custom = new HashMap<String, String>();
+			clone.m_custom.putAll(m_custom);
+		}
+		if (m_newValues != null)
+		{
+			clone.m_newValues = new Object[m_newValues.length];
+			for(int i = 0; i < m_newValues.length; i++)
+			{
+				clone.m_newValues[i] = m_newValues[i];
+			}
+		}
+		if (m_oldValues != null)
+		{
+			clone.m_oldValues = new Object[m_oldValues.length];
+			for(int i = 0; i < m_oldValues.length; i++)
+			{
+				clone.m_oldValues[i] = m_oldValues[i];
+			}
+		}
+		if (m_IDs != null)
+		{
+			clone.m_IDs = new Object[m_IDs.length];
+			for(int i = 0; i < m_IDs.length; i++)
+			{
+				clone.m_IDs[i] = m_IDs[i];
+			}
+		}
+		clone.p_ctx = Env.getCtx();
+		clone.m_doc = null;
+		clone.m_lobInfo = null;
+		clone.m_attachment = null;
+		clone.m_isReplication = false;
+		return clone;
+	}
+
 	// SMJ modification to mashall the PO to XML
 	
 	public String getXmlRepresentation() {
-	 try {
-	if (null != this) {
-		StringWriter res = new StringWriter();
-		XMLStreamWriter writer = XMLOutputFactory.newInstance().createXMLStreamWriter(res);
-		
-		//writer.writeStartDocument("UTF-8","1.0");
-		writer.writeStartDocument();
-		writer.writeStartElement("entityDetail");
-		writer.writeStartElement("type");
-		writer.writeCharacters(this.get_TableName().substring(this.get_TableName().indexOf('_') + 1).toUpperCase());
-		writer.writeEndElement();
-		writer.writeStartElement("detail");
-		Field[] fields = this.getClass().getFields();
-		for (int i = 0; i < fields.length; i++) {
-			Field tmp = fields[i];
-			if (tmp.getName().contains("COLUMNNAME")) {
-				writer.writeStartElement(tmp.getName().substring(11));
-				//writer.writeCharacters(this.get_DisplayValue(tmp.getName().substring(11), true));
-				//System.out.println("Campo:"+tmp.getName().substring(11)+"--Valor:"+this.get_Value(tmp.getName().substring(11)));
-				String campo = "";
-				if (this.get_Value(tmp.getName().substring(11)) != null){
-				//System.out.println(tmp.getName()+":Tipo Campo:"+this.get_Value(tmp.getName().substring(11)).getClass());
-				
-				//if (this.get_Value(tmp.getName().substring(11)).getClass().getSimpleName().equalsIgnoreCase("String"))
-				   campo = (String) (this.get_ValueAsString(tmp.getName().substring(11)));
-				if (campo == null)  campo = "nulo";
-				}   
-				else
-				   campo = this.get_DisplayValue(tmp.getName().substring(11), true);
-				writer.writeCharacters(campo);
+		try {
+			if (null != this) {
+				StringWriter res = new StringWriter();
+				XMLStreamWriter writer = XMLOutputFactory.newInstance()
+						.createXMLStreamWriter(res);
+
+				// writer.writeStartDocument("UTF-8","1.0");
+				writer.writeStartDocument();
+				writer.writeStartElement("entityDetail");
+				writer.writeStartElement("type");
+				writer.writeCharacters(this.get_TableName()
+						.substring(this.get_TableName().indexOf('_') + 1)
+						.toUpperCase());
 				writer.writeEndElement();
+				writer.writeStartElement("detail");
+				Field[] fields = this.getClass().getFields();
+				for (int i = 0; i < fields.length; i++) {
+					Field tmp = fields[i];
+					if (tmp.getName().contains("COLUMNNAME")) {
+						writer.writeStartElement(tmp.getName().substring(11));
+						// writer.writeCharacters(this.get_DisplayValue(tmp.getName().substring(11),
+						// true));
+						// System.out.println("Campo:"+tmp.getName().substring(11)+"--Valor:"+this.get_Value(tmp.getName().substring(11)));
+						String campo = "";
+						if (this.get_Value(tmp.getName().substring(11)) != null) {
+							// System.out.println(tmp.getName()+":Tipo Campo:"+this.get_Value(tmp.getName().substring(11)).getClass());
+
+							// if
+							// (this.get_Value(tmp.getName().substring(11)).getClass().getSimpleName().equalsIgnoreCase("String"))
+							campo = (String) (this.get_ValueAsString(tmp
+									.getName().substring(11)));
+							if (campo == null)
+								campo = "nulo";
+						} else
+							campo = this.get_DisplayValue(tmp.getName()
+									.substring(11), true);
+						writer.writeCharacters(campo);
+						writer.writeEndElement();
+					}
+				}
+				// System.out.println("Nombre de Tabla"+this.get_TableName().toUpperCase().trim());
+				// calculo del total de existencias para cuando el PO es de tipo
+				// MSTORAGE
+				if ((this.get_TableName()
+						.substring(this.get_TableName().indexOf('_') + 1)
+						.toUpperCase().trim().equalsIgnoreCase("STORAGE"))) {
+					String idCampo = this.get_ValueAsString("M_Product_ID");
+					int totalProducto = 0;
+
+					// Properties ctx = Env.getCtx();
+					PreparedStatement pstmt = null;
+					ResultSet rs = null;
+					Trx trx = Trx.get(Trx.createTrxName("AL"), true);
+					try {
+						// System.out.println("calcula sumatoria de existencias en M_storage");
+						StringBuffer sql = new StringBuffer();
+						sql.append("select sum(qtyonhand) from m_storage  ");
+						sql.append("where m_product_id = " + idCampo);
+						// System.out.println(sql);
+						// System.out.println(sql);
+
+						pstmt = DB.prepareStatement(sql.toString(),
+								trx.getTrxName());
+						rs = pstmt.executeQuery();
+
+						if (rs.next()) {
+							totalProducto = rs.getInt(1);
+						}
+
+					} catch (Exception e) {
+						e.printStackTrace();
+						return "Sincronizacion con POS tuvo errores consultar log !";
+					} finally {
+						DB.close(rs, pstmt);
+						trx.close();
+						rs = null;
+						pstmt = null;
+					}
+
+					writer.writeStartElement("M_Product_TotalStock");
+					writer.writeCharacters(Integer.toString(totalProducto));
+					writer.writeEndElement();
+				}
+
+				writer.writeEndElement(); // detail
+				writer.writeEndElement(); // entityDetail
+				writer.writeEndDocument();
+				return res.toString();
+			} else {
+				return null;
 			}
-		}
-		//System.out.println("Nombre de Tabla"+this.get_TableName().toUpperCase().trim());
-		// calculo del total de existencias para cuando el PO es de tipo MSTORAGE
-		if ((this.get_TableName().substring(this.get_TableName().indexOf('_') + 1).toUpperCase().trim().equalsIgnoreCase("STORAGE"))) 
-		{
-			String idCampo = this.get_ValueAsString("M_Product_ID");
-			int totalProducto = 0;
-			
-//			Properties ctx = Env.getCtx();
-			PreparedStatement pstmt = null;
-			ResultSet rs = null;
-			Trx trx = Trx.get(Trx.createTrxName("AL"), true);
-			try {
-			//	System.out.println("calcula sumatoria de existencias en M_storage");			
-				StringBuffer sql = new StringBuffer();
-				sql.append("select sum(qtyonhand) from m_storage  ");
-				sql.append("where m_product_id = "+ idCampo );
-			//	System.out.println(sql);
-				//System.out.println(sql);
-				
-				pstmt = DB.prepareStatement (sql.toString(), trx.getTrxName());
-				rs = pstmt.executeQuery ();
-				
-				if (rs.next ())	{
-					totalProducto = rs.getInt(1);
-				}	
-					
-			} catch (Exception e) {
-	            e.printStackTrace();
-	            return "Sincronizacion con POS tuvo errores consultar log !";
-			}
-			finally	{
-				DB.close(rs, pstmt); trx.close();
-				rs = null; pstmt = null;
-			}
-				
-			writer.writeStartElement("M_Product_TotalStock");
-			writer.writeCharacters(Integer.toString(totalProducto));
-			writer.writeEndElement();
-		}
-		
-			writer.writeEndElement(); // detail
-			writer.writeEndElement(); // entityDetail
-		writer.writeEndDocument();
-		return res.toString();
-		} else {
-		return null;
-		}
 		} catch (Exception ex) {
-		ex.printStackTrace();
-		return null;
+			ex.printStackTrace();
+			return null;
 		}
-		}
-	
-	
+	}
 
 }   //  PO
